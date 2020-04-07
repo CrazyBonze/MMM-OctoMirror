@@ -2,13 +2,13 @@
 /* jshint esversion: 6 */
 
 /* Magic Mirror
- * Module: OctoMirror-Module
+ * Module: MMM-OctoMirror
  *
- * By Kieran Ramnarine
+ * By Micheal Taylor
  * MIT Licensed.
  */
 
-Module.register("octomirror-module", {
+Module.register("MMM-OctoMirror", {
     defaults: {
         updateInterval: 60 * 1000,
         retryDelay: 2500,

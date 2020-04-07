@@ -112,10 +112,10 @@
         additional = additional || {};
 
         var headers = $.extend({}, additional);
+
         if (this.options.apikey) {
             headers["X-Api-Key"] = this.options.apikey;
         }
-
         if (this.options.locale !== undefined) {
             headers["X-Locale"] = this.options.locale;
         }
@@ -338,6 +338,24 @@
 
     OctoPrintClient.InvalidArgumentError = OctoPrintClient.createCustomException("InvalidArgumentError");
 
+    OctoPrintClient.deprecated = function (deprecatedFct, newFct, fn) {
+        return function() {
+            console.warn(deprecatedFct + " is deprecated, please use the new " + newFct + " function instead");
+            return fn.apply(this, arguments);
+        };
+    };
+
+    OctoPrintClient.deprecatedMethod = function(object, oldNamespace, oldFct, newNamespace, newFct, fn) {
+        object[oldFct] = OctoPrintClient.deprecated(oldNamespace + "." + oldFct, newNamespace + "." + newFct, fn);
+    };
+
+    OctoPrintClient.deprecatedVariable = function(object, oldNamespace, oldVar, newNamespace, newVar, getter, setter) {
+        Object.defineProperty(object, oldVar, {
+            get: function() { return OctoPrintClient.deprecated(oldNamespace + "." + oldVar, newNamespace + "." + newVar, getter)(); },
+            set: function(val) { OctoPrintClient.deprecated(oldNamespace + "." + oldVar, newNamespace + "." + newVar, setter)(val); }
+        });
+    };
+
     return OctoPrintClient;
 });
 
@@ -355,10 +373,13 @@
     var normalClose = 1000;
 
     var OctoPrintSocketClient = function(base) {
+        var self = this;
+
         this.base = base;
 
         this.options = {
             timeouts: [0, 1, 1, 2, 3, 5, 8, 13, 20, 40, 100],
+            connectTimeout: 5000,
             rateSlidingWindowSize: 20
         };
 
@@ -370,6 +391,16 @@
         this.rateThrottleFactor = 1;
         this.rateBase = 500;
         this.rateLastMeasurements = [];
+
+        this.connectTimeout = undefined;
+
+        this.onMessage("connected", function() {
+            // Make sure to clear connection timeout on connect
+            if (self.connectTimeout) {
+                clearTimeout(self.connectTimeout);
+                self.connectTimeout = undefined;
+            }
+        })
     };
 
     OctoPrintSocketClient.prototype.propagateMessage = function(event, data) {
@@ -444,14 +475,14 @@
     OctoPrintSocketClient.prototype.connect = function(opts) {
         opts = opts || {};
 
-        this.disconnect();
+        var self = this;
 
-        var url = this.base.options.baseurl;
+        self.disconnect();
+
+        var url = self.base.options.baseurl;
         if (!_.endsWith(url, "/")) {
             url += "/";
         }
-
-        var self = this;
 
         var onOpen = function() {
             self.reconnecting = false;
@@ -460,7 +491,7 @@
         };
 
         var onClose = function(e) {
-            if (e.code == normalClose) {
+            if (e.code === normalClose) {
                 return;
             }
 
@@ -485,10 +516,17 @@
             });
         };
 
-        this.socket = new SockJS(url + "sockjs", undefined, opts);
-        this.socket.onopen = onOpen;
-        this.socket.onclose = onClose;
-        this.socket.onmessage = onMessage;
+        if (self.connectTimeout) {
+            clearTimeout(self.connectTimeout);
+        }
+        self.connectTimeout = setTimeout(function() {
+            self.onConnectTimeout();
+        }, self.options.connectTimeout);
+
+        self.socket = new SockJS(url + "sockjs", undefined, opts);
+        self.socket.onopen = onOpen;
+        self.socket.onclose = onClose;
+        self.socket.onmessage = onMessage;
     };
 
     OctoPrintSocketClient.prototype.reconnect = function() {
@@ -498,7 +536,7 @@
     };
 
     OctoPrintSocketClient.prototype.disconnect = function() {
-        if (this.socket != undefined) {
+        if (this.socket !== undefined) {
             this.socket.close();
         }
     };
@@ -515,6 +553,7 @@
     OctoPrintSocketClient.prototype.onReconnectFailed = function() {};
     OctoPrintSocketClient.prototype.onConnected = function() {};
     OctoPrintSocketClient.prototype.onDisconnected = function(code) {};
+    OctoPrintSocketClient.prototype.onConnectTimeout = function() {};
 
     OctoPrintSocketClient.prototype.onRateTooLow = function(measured, minimum) {
         this.increaseRate();
@@ -525,6 +564,230 @@
 
     OctoPrintClient.registerComponent("socket", OctoPrintSocketClient);
     return OctoPrintSocketClient;
+});
+
+;
+
+// source: js/app/client/access.js
+(function (global, factory) {
+    if (typeof define === "function" && define.amd) {
+        define("OctoPrintAccessClient", ["OctoPrintClient"], factory);
+    } else {
+        global.OctoPrintAccessClient = factory(global.OctoPrintClient);
+    }
+})(this, function(OctoPrintClient) {
+    var baseAccessUrl = "api/access";
+
+    //~~ permissions client api
+
+    var OctoPrintAccessPermissionsClient = function(access) {
+        this.access = access;
+        this.base = this.access.base;
+
+        var baseUrl = baseAccessUrl + "/permissions";
+        this.url = function() {
+            if (arguments.length) {
+                return baseUrl + "/" + Array.prototype.join.call(arguments, "/");
+            } else {
+                return baseUrl;
+            }
+        };
+    };
+
+    OctoPrintAccessPermissionsClient.prototype.list = function (opts) {
+        return this.base.get(this.url(), opts);
+    };
+
+    //~~ groups client api
+
+    var OctoPrintAccessGroupsClient = function(access) {
+        this.access = access;
+        this.base = this.access.base;
+
+        var baseUrl = baseAccessUrl + "/groups";
+        this.url = function() {
+            if (arguments.length) {
+                return baseUrl + "/" + Array.prototype.join.call(arguments, "/");
+            } else {
+                return baseUrl;
+            }
+        };
+    };
+
+    OctoPrintAccessGroupsClient.prototype.list = function (opts) {
+        return this.base.get(this.url(), opts);
+    };
+
+    OctoPrintAccessGroupsClient.prototype.add = function (group, opts) {
+        if (!group.key) {
+            throw new OctoPrintClient.InvalidArgumentError("group key must be set");
+        }
+        if (!group.name) {
+            throw new OctoPrintClient.InvalidArgumentError("group name must be set");
+        }
+
+        var data = {
+            key: group.key,
+            name: group.name,
+            description: group.description,
+            permissions: group.permissions,
+            subgroups: group.subgroups,
+            default: group.default
+        };
+
+        return this.base.postJson(this.url(), data, opts);
+    };
+
+    OctoPrintAccessGroupsClient.prototype.get = function (key, opts) {
+        if (!key) {
+            throw new OctoPrintClient.InvalidArgumentError("group key must be set");
+        }
+
+        return this.base.get(this.url(key), opts);
+    };
+
+    OctoPrintAccessGroupsClient.prototype.update = function (group, opts) {
+        if (!group.key) {
+            throw new OctoPrintClient.InvalidArgumentError("group key must be set");
+        }
+
+        var data = {
+            description: group.description,
+            permissions: group.permissions,
+            subgroups: group.subgroups,
+            default: group.default
+        };
+        return this.base.putJson(this.url(group.key), data, opts);
+    };
+
+    OctoPrintAccessGroupsClient.prototype.delete = function (key, opts) {
+        if (!key) {
+            throw new OctoPrintClient.InvalidArgumentError("group key must be set");
+        }
+
+        return this.base.delete(this.url(key), opts);
+    };
+
+    //~~ users client api
+
+    var OctoPrintAccessUsersClient = function(access) {
+        this.access = access;
+        this.base = this.access.base;
+
+        var baseUrl = baseAccessUrl + "/users";
+        this.url = function() {
+            if (arguments.length) {
+                return baseUrl + "/" + Array.prototype.join.call(arguments, "/");
+            } else {
+                return baseUrl;
+            }
+        };
+    };
+
+    OctoPrintAccessUsersClient.prototype.list = function (opts) {
+        return this.base.get(this.url(), opts);
+    };
+
+    OctoPrintAccessUsersClient.prototype.add = function (user, opts) {
+        if (!user.name || !user.password) {
+            throw new OctoPrintClient.InvalidArgumentError("Both user's name and password need to be set");
+        }
+
+            var data = {
+                name: user.name,
+                password: user.password,
+                groups: user.hasOwnProperty("groups") ? user.groups : [],
+                permissions: user.hasOwnProperty("permissions") ? user.permissions : [],
+                active: user.hasOwnProperty("active") ? !!user.active : true,
+                admin: user.hasOwnProperty("admin") ? !!user.admin : false
+            };
+
+        return this.base.postJson(this.url(), data, opts);
+    };
+
+    OctoPrintAccessUsersClient.prototype.get = function (name, opts) {
+        if (!name) {
+            throw new OctoPrintClient.InvalidArgumentError("user name must be set");
+        }
+
+        return this.base.get(this.url(name), opts);
+    };
+
+    OctoPrintAccessUsersClient.prototype.update = function (name, active, admin, permissions, groups, opts) {
+        if (!name) {
+            throw new OctoPrintClient.InvalidArgumentError("user name must be set");
+        }
+
+        var data = {
+            active: !!active,
+            groups: groups,
+            permissions: permissions,
+            admin: !!admin
+        };
+        return this.base.putJson(this.url(name), data, opts);
+    };
+
+    OctoPrintAccessUsersClient.prototype.delete = function (name, opts) {
+        if (!name) {
+            throw new OctoPrintClient.InvalidArgumentError("user name must be set");
+        }
+
+        return this.base.delete(this.url(name), opts);
+    };
+
+    OctoPrintAccessUsersClient.prototype.changePassword = function (name, password, opts) {
+        if (!name || !password) {
+            throw new OctoPrintClient.InvalidArgumentError("user name and password must be set");
+        }
+
+        var data = {
+            password: password
+        };
+        return this.base.putJson(this.url(name, "password"), data, opts);
+    };
+
+    OctoPrintAccessUsersClient.prototype.generateApiKey = function (name, opts) {
+        if (!name) {
+            throw new OctoPrintClient.InvalidArgumentError("user name must be set");
+        }
+
+        return this.base.postJson(this.url(name, "apikey"), opts);
+    };
+
+    OctoPrintAccessUsersClient.prototype.resetApiKey = function (name, opts) {
+        if (!name) {
+            throw new OctoPrintClient.InvalidArgumentError("user name must be set");
+        }
+
+        return this.base.delete(this.url(name, "apikey"), opts);
+    };
+
+    OctoPrintAccessUsersClient.prototype.getSettings = function (name, opts) {
+        if (!name) {
+            throw new OctoPrintClient.InvalidArgumentError("user name must be set");
+        }
+
+        return this.base.get(this.url(name, "settings"), opts);
+    };
+
+    OctoPrintAccessUsersClient.prototype.saveSettings = function (name, settings, opts) {
+        if (!name) {
+            throw new OctoPrintClient.InvalidArgumentError("user name must be set");
+        }
+
+        settings = settings || {};
+        return this.base.patchJson(this.url(name, "settings"), settings, opts);
+    };
+
+    var OctoPrintAccessClient = function(base) {
+        this.base = base;
+
+        this.permissions = new OctoPrintAccessPermissionsClient(this);
+        this.groups = new OctoPrintAccessGroupsClient(this);
+        this.users = new OctoPrintAccessUsersClient(this);
+    };
+    OctoPrintClient.registerComponent("access", OctoPrintAccessClient);
+    return OctoPrintAccessClient;
 });
 
 ;
@@ -824,7 +1087,7 @@
                 return entry;
             }
 
-            if (!entry.hasOwnProperty("children")) {
+            if (!entry.hasOwnProperty("children") || !entry.children) {
                 return undefined;
             }
 
@@ -961,6 +1224,7 @@
     var printheadUrl = url + "/printhead";
     var toolUrl = url + "/tool";
     var bedUrl = url + "/bed";
+    var chamberUrl = url + "/chamber";
     var sdUrl = url + "/sd";
 
     var OctoPrintPrinterClient = function(base) {
@@ -977,6 +1241,10 @@
 
     OctoPrintPrinterClient.prototype.issueBedCommand = function (command, payload, opts) {
         return this.base.issueCommand(bedUrl, command, payload, opts);
+    };
+
+    OctoPrintPrinterClient.prototype.issueChamberCommand = function (command, payload, opts) {
+        return this.base.issueCommand(chamberUrl, command, payload, opts);
     };
 
     OctoPrintPrinterClient.prototype.issueSdCommand = function (command, payload, opts) {
@@ -1032,6 +1300,23 @@
         var limit = flags.limit || undefined;
 
         var getUrl = bedUrl;
+        if (history) {
+            getUrl += "?history=true";
+            if (limit) {
+                getUrl += "&limit=" + limit;
+            }
+        }
+
+        return this.base.get(getUrl, opts);
+    };
+
+    OctoPrintPrinterClient.prototype.getChamberState = function (flags, opts) {
+        flags = flags || {};
+
+        var history = flags.history || undefined;
+        var limit = flags.limit || undefined;
+
+        var getUrl = chamberUrl;
         if (history) {
             getUrl += "?history=true";
             if (limit) {
@@ -1148,6 +1433,26 @@
         };
 
         return this.issueBedCommand("offset", payload, opts);
+    };
+
+    OctoPrintPrinterClient.prototype.setChamberTargetTemperature = function (target, opts) {
+        target = target || 0;
+
+        var payload = {
+            target: target
+        };
+
+        return this.issueChamberCommand("target", payload, opts);
+    };
+
+    OctoPrintPrinterClient.prototype.setChamberTemperatureOffset = function (offset, opts) {
+        offset = offset || 0;
+
+        var payload = {
+            offset: offset
+        };
+
+        return this.issueChamberCommand("offset", payload, opts);
     };
 
     OctoPrintPrinterClient.prototype.initSd = function (opts) {
@@ -1487,115 +1792,58 @@
 // source: js/app/client/users.js
 (function (global, factory) {
     if (typeof define === "function" && define.amd) {
-        define(["OctoPrintClient"], factory);
+        define(["OctoPrintClient", "OctoPrintAccessClient"], factory);
     } else {
         factory(global.OctoPrintClient);
     }
 })(this, function(OctoPrintClient) {
-    var baseUrl = "api/users";
-
-    var url = function() {
-        if (arguments.length) {
-            return baseUrl + "/" + Array.prototype.join.call(arguments, "/");
-        } else {
-            return baseUrl;
-        }
+    var deprecatedUserClient = function (deprecatedFct, newFct, fn) {
+        return OctoPrintClient.deprecated("OctoPrint.users." + deprecatedFct, "OctoPrint.access.users." + newFct, fn);
     };
 
     var OctoPrintUserClient = function(base) {
         this.base = base;
     };
 
-    OctoPrintUserClient.prototype.list = function (opts) {
-        return this.base.get(url(), opts);
-    };
+    OctoPrintUserClient.prototype.list = deprecatedUserClient("list", "list", function (opts) {
+        return this.base.access.users.list(opts);
+    });
 
-    OctoPrintUserClient.prototype.add = function (user, opts) {
-        if (!user.name || !user.password) {
-            throw new OctoPrintClient.InvalidArgumentError("Both user's name and password need to be set");
-        }
+    OctoPrintUserClient.prototype.add = deprecatedUserClient("add", "add", function (user, opts) {
+        return this.base.access.users.add(user, opts);
+    });
 
-        var data = {
-            name: user.name,
-            password: user.password,
-            active: user.hasOwnProperty("active") ? !!user.active : true,
-            admin: user.hasOwnProperty("admin") ? !!user.admin : false
-        };
+    OctoPrintUserClient.prototype.get = deprecatedUserClient("get", "get", function (name, opts) {
+        return this.base.access.users.get(name, opts);
+    });
 
-        return this.base.postJson(url(), data, opts);
-    };
+    OctoPrintUserClient.prototype.update = deprecatedUserClient("update", "update", function (name, active, admin, permissions, groups, opts) {
+        return this.base.access.users.update(name, active, admin, permissions, groups, opts);
+    });
 
-    OctoPrintUserClient.prototype.get = function (name, opts) {
-        if (!name) {
-            throw new OctoPrintClient.InvalidArgumentError("user name must be set");
-        }
+    OctoPrintUserClient.prototype.delete = deprecatedUserClient("delete", "delete", function (name, opts) {
+        return this.base.access.users.delete(name, opts);
+    });
 
-        return this.base.get(url(name), opts);
-    };
+    OctoPrintUserClient.prototype.changePassword = deprecatedUserClient("changePassword", "changePassword", function (name, password, opts) {
+        return this.base.access.users.changePassword(name, password, opts);
+    });
 
-    OctoPrintUserClient.prototype.update = function (name, active, admin, opts) {
-        if (!name) {
-            throw new OctoPrintClient.InvalidArgumentError("user name must be set");
-        }
+    OctoPrintUserClient.prototype.generateApiKey = deprecatedUserClient("generateApiKey", "generateApiKey", function (name, opts) {
+        return this.base.access.users.generateApiKey(name, opts);
+    });
 
-        var data = {
-            active: !!active,
-            admin: !!admin
-        };
-        return this.base.putJson(url(name), data, opts);
-    };
+    OctoPrintUserClient.prototype.resetApiKey = deprecatedUserClient("resetApiKey", "resetApiKey", function (name, opts) {
+        return this.base.access.users.resetApiKey(name, opts);
+    });
 
-    OctoPrintUserClient.prototype.delete = function (name, opts) {
-        if (!name) {
-            throw new OctoPrintClient.InvalidArgumentError("user name must be set");
-        }
+    OctoPrintUserClient.prototype.getSettings = deprecatedUserClient("getSettings", "getSettings", function (name, opts) {
+        return this.base.access.users.getSettings(name, opts);
+    });
 
-        return this.base.delete(url(name), opts);
-    };
-
-    OctoPrintUserClient.prototype.changePassword = function (name, password, opts) {
-        if (!name || !password) {
-            throw new OctoPrintClient.InvalidArgumentError("user name and password must be set");
-        }
-
-        var data = {
-            password: password
-        };
-        return this.base.putJson(url(name, "password"), data, opts);
-    };
-
-    OctoPrintUserClient.prototype.generateApiKey = function (name, opts) {
-        if (!name) {
-            throw new OctoPrintClient.InvalidArgumentError("user name must be set");
-        }
-
-        return this.base.postJson(url(name, "apikey"), opts);
-    };
-
-    OctoPrintUserClient.prototype.resetApiKey = function (name, opts) {
-        if (!name) {
-            throw new OctoPrintClient.InvalidArgumentError("user name must be set");
-        }
-
-        return this.base.delete(url(name, "apikey"), opts);
-    };
-
-    OctoPrintUserClient.prototype.getSettings = function (name, opts) {
-        if (!name) {
-            throw new OctoPrintClient.InvalidArgumentError("user name must be set");
-        }
-
-        return this.base.get(url(name, "settings"), opts);
-    };
-
-    OctoPrintUserClient.prototype.saveSettings = function (name, settings, opts) {
-        if (!name) {
-            throw new OctoPrintClient.InvalidArgumentError("user name must be set");
-        }
-
-        settings = settings || {};
-        return this.base.patchJson(url(name, "settings"), settings, opts);
-    };
+    OctoPrintUserClient.prototype.saveSettings = deprecatedUserClient("saveSettings", "saveSettings", function (name, settings, opts) {
+        return this.base.access.users.saveSettings(name, settings, opts);
+    });
 
     OctoPrintClient.registerComponent("users", OctoPrintUserClient);
     return OctoPrintUserClient;
@@ -1990,18 +2238,21 @@
     };
 
     OctoPrintPluginManagerClient.prototype.get = function(refresh, opts) {
-        var refresh_repo, refresh_notices;
+        var refresh_repo, refresh_notices, refresh_orphans;
         if (_.isPlainObject(refresh)) {
             refresh_repo = refresh.repo || false;
             refresh_notices = refresh.notices || false;
+            refresh_orphans = refresh.orphans || false;
         } else {
             refresh_repo = refresh;
             refresh_notices = false;
+            refresh_orphans = false;
         }
 
         var query = [];
         if (refresh_repo) query.push("refresh_repository=true");
         if (refresh_notices) query.push("refresh_notices=true");
+        if (refresh_orphans) query.push("refresh_orphans=true");
 
         return this.base.get(this.base.getSimpleApiUrl("pluginmanager") + ((query.length) ? "?" + query.join("&") : ""), opts);
     };
@@ -2032,11 +2283,30 @@
         return this.base.simpleApiCommand("pluginmanager", "install", data, opts);
     };
 
-    OctoPrintPluginManagerClient.prototype.uninstall = function(plugin, opts) {
+    OctoPrintPluginManagerClient.prototype.uninstall = function(plugin, cleanup, opts) {
+        // backwards compatibility to former argument list (plugin, opts)
+        if (arguments.length === 2 && typeof cleanup === "object") {
+            opts = cleanup;
+            cleanup = false;
+        }
+
+        var data = {
+            plugin: plugin,
+            cleanup: !!cleanup
+        };
+        return this.base.simpleApiCommand("pluginmanager", "uninstall", data, opts);
+    };
+
+    OctoPrintPluginManagerClient.prototype.cleanup = function(plugin, opts) {
         var data = {
             plugin: plugin
         };
-        return this.base.simpleApiCommand("pluginmanager", "uninstall", data, opts);
+        return this.base.simpleApiCommand("pluginmanager", "cleanup", data, opts);
+    };
+
+    OctoPrintPluginManagerClient.prototype.cleanupAll = function(plugin, opts) {
+        var data = {};
+        return this.base.simpleApiCommand("pluginmanager", "cleanup_all", data, opts);
     };
 
     OctoPrintPluginManagerClient.prototype.enable = function(plugin, opts) {
