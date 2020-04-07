@@ -1,4 +1,4 @@
-# Module: Display & Control OctoPrint Instance (Octomirror-module)
+# Module: Display & Control OctoPrint Instance (MMM-OctoMirror)
 
 This is a module for <a href="https://github.com/MichMich/MagicMirror">MagicMirror</a> that will interact with an Octoprint Instance. 
 
@@ -9,7 +9,7 @@ The module will allow you to:
 - Manually control the printer
 - Recieve live updates on printer status
 
-If you have any suggest, please let me know [by an issue](https://github.com/DongerZonie/octomirror-module/issues/new).
+If you have any suggest, please let me know [by an issue](https://github.com/CrazyBonze/MMM-OctoMirror/issues/new).
 
 ## Screenshot
 
@@ -25,8 +25,8 @@ If you have any suggest, please let me know [by an issue](https://github.com/Don
 
 ````shell
 cd ~/MagicMirror/modules
-git clone https://github.com/shbatm/octomirror-module.git
-cd octomirror-module
+git clone https://github.com/CrazyBonze/MMM-OctoMirror.git
+cd MMM-OctoMirror
 npm install
 # A version of OctoPrint's JS Client Library is included by default, but it's
 # recommended to replace it with your server's version.
@@ -34,17 +34,19 @@ npm install
 wget http://octopi.local/static/webassets/packed_client.js -O packed_client.js
 ````
 
+Go to your OctoPrint web portal, go to settings, scroll down to API and select it. At the top of the API settings make sure the checkbox for `Allow Cross Origin Resource Sharing (CORS)` is checked and copy your API key. You may need to restart your OctoPrint server.
+
 ## Using the Module
 
 To use this module, add it to the modules array in the `config/config.js` file:
 
 ```js
     {
-        module: "octomirror-module",
+        module: "MMM-OctoMirror",
         position: "middle_center",
         config: {
             url: "http://octopi.local",
-            api_key: "[Octoprint API Key]"
+            api_key: "[OctoPrint API Key]"
         }
     },
 ```
