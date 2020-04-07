@@ -1,6 +1,6 @@
 # Module: Display & Control OctoPrint Instance (MMM-OctoMirror)
 
-This is a module for <a href="https://github.com/MichMich/MagicMirror">MagicMirror</a> that will interact with an Octoprint Instance. 
+This is a module for <a href="https://github.com/MichMich/MagicMirror">MagicMirror</a> that will interact with an OctoPrint Instance. 
 
 The module will allow you to:
 - View a live feed of the raspicam stream
@@ -13,7 +13,7 @@ If you have any suggest, please let me know [by an issue](https://github.com/Cra
 
 ## Screenshot
 
-![](https://raw.githubusercontent.com/shbatm/octomirror-module/master/img/capture.png)
+![](https://github.com/CrazyBonze/MMM-OctoMirror/blob/master/img/capture.png)
 
 ## Requirements
 
