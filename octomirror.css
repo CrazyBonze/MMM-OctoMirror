@@ -1,0 +1,55 @@
+.menu {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+button {
+  border: none;
+  color: black;
+  background-color: #e7e7e7;
+  padding: 4px 8px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  margin: 4px 2px;
+  border-radius: 4px;
+  transition-duration: 0.4s;
+  font-family: "Roboto Condensed";
+  font-size: 20px;
+  line-height: 25px;
+}
+
+select {
+  border: none;
+  color: black;
+  background-color: #e7e7e7;
+  padding: 2px 8px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  margin: 4px 2px;
+  border-radius: 4px;
+  font-family: "Roboto Condensed";
+  font-size: 20px;
+  line-height: 25px;
+}
+
+.upload-wrapper {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+}
+
+.upload-wrapper input[type=file] {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  opacity: 0;
+  font-size: 20px;
+  padding: 0px;
+  margin: 0px;
+  height: 100%;
+  width: 100%;
+}

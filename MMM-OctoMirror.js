@@ -45,7 +45,10 @@ Module.register("MMM-OctoMirror", {
     }
 
     if (this.config.interactive) {
+
+      //File menue dropdown
       var fileMenu = document.createElement("div");
+      fileMenu.className = "menu";
       var fileList = document.createElement("select");
       for (var f in this.files) {
         var option = document.createElement("option");
@@ -53,24 +56,30 @@ Module.register("MMM-OctoMirror", {
         option.appendChild(document.createTextNode(this.files[f]));
         fileList.appendChild(option);
       }
+
+      //Send to printer button
       var printButton = document.createElement("button");
-      printButton.appendChild(document.createTextNode("Send to Printer"));
+      printButton.innerHTML = '<i class="fa fa-print"></i> Print';
       printButton.addEventListener("click", function() {
         self.sendPrint(fileList.value);
       });
-      var fileUpload = document.createElement("div");
-      var uploadFileInput = document.createElement("input");
-      uploadFileInput.setAttribute("type", "file");
+
+      //Upload file button
+      var uploadDiv = document.createElement("div");
+      uploadDiv.className = "upload-wrapper";
+      var uploadInput = document.createElement("input");
+      uploadInput.setAttribute("type", "file");
+      uploadInput.onchange = function() {
+        self.uploadFile(uploadInput.files[0]);
+      };
       var uploadButton = document.createElement("button");
-      uploadButton.appendChild(document.createTextNode("Upload Files"));
-      uploadButton.addEventListener("click", function() {
-        self.uploadFile(uploadFileInput.value);
-      });
-      fileUpload.appendChild(uploadFileInput);
-      fileUpload.appendChild(uploadButton);
+      uploadButton.innerHTML = '<i class="fa fa-upload"></i> Upload';
+      uploadDiv.appendChild(uploadInput);
+      uploadDiv.appendChild(uploadButton);
+
+      fileMenu.appendChild(uploadDiv);
       fileMenu.appendChild(fileList);
       fileMenu.appendChild(printButton);
-      fileMenu.appendChild(fileUpload);
       wrapper.appendChild(fileMenu);
     }
 
@@ -272,6 +281,10 @@ Module.register("MMM-OctoMirror", {
         $("#opBedTempTgt")[0].innerHTML = (temps.bed.target) ? Math.round(temps.bed.target) + "&deg;C" : "N/A";
       }
     }
+  },
+
+  getStyles: function () {
+    return ["octomirror.css", "font-awesome.css"];
   },
 
   notificationReceived: function(notification, payload, sender) {
