@@ -14,5 +14,11 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/CrazyBonze/MMM-OctoMirror.git"
+  },
+  "scripts": {
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "2.0.4"
   }
 }
