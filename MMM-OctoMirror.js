@@ -75,9 +75,10 @@ Module.register("MMM-OctoMirror", {
       };
       var uploadButton = document.createElement("button");
       uploadButton.innerHTML = '<i class="fa fa-upload"></i> Upload';
+
+      //Add to DOM
       uploadDiv.appendChild(uploadInput);
       uploadDiv.appendChild(uploadButton);
-
       fileMenu.appendChild(uploadDiv);
       fileMenu.appendChild(fileList);
       fileMenu.appendChild(printButton);
@@ -147,8 +148,6 @@ Module.register("MMM-OctoMirror", {
   },
 
   initializeSocket: function () {
-    var self = this;
-
     let user = "_api",
       session = "";
 
@@ -170,6 +169,9 @@ Module.register("MMM-OctoMirror", {
     });
 
     this.opClient.socket.onMessage("connected", (message) => {
+      if (this.config.debugMode) {
+        console.log("Octoprint client info:", message);
+      }
       this.opClient.socket.socket.send(
         JSON.stringify({ auth: `${user}:${session}` })
       );
@@ -246,7 +248,11 @@ Module.register("MMM-OctoMirror", {
   uploadFile: function (file) {
     var self = this;
     this.opClient.files.upload("local", file).done(function (response) {
-      self.updateFiles();
+      if (response[1] === "success") {
+        self.updateFiles();
+      } else {
+        console.log(response);
+      }
     });
   },
 
@@ -265,32 +271,38 @@ Module.register("MMM-OctoMirror", {
 
     var icon = $("#opStateIcon")[0];
     if (data.state.flags.printing) {
-      icon.innerHTML = `<i class="fa fa-print" aria-hidden="true" style="color:green;"></i>`;
+      icon.innerHTML =
+        '<i class="fa fa-print" aria-hidden="true" style="color:green;"></i>';
       if (!this.config.showDetailsWhenOffline) {
         $("#opMoreInfo").show();
       }
     } else if (data.state.flags.closedOrError) {
-      icon.innerHTML = `<i class="fa fa-exclamation-triangle" aria-hidden="true" style="color:red;"></i>`;
+      icon.innerHTML =
+        '<i class="fa fa-exclamation-triangle" aria-hidden="true" style="color:red;"></i>';
       if (!this.config.showDetailsWhenOffline) {
         $("#opMoreInfo").hide();
       }
     } else if (data.state.flags.paused) {
-      icon.innerHTML = `<i class="fa fa-pause" aria-hidden="true" style="color:yellow;"></i>`;
+      icon.innerHTML =
+        '<i class="fa fa-pause" aria-hidden="true" style="color:yellow;"></i>';
       if (!this.config.showDetailsWhenOffline) {
         $("#opMoreInfo").show();
       }
     } else if (data.state.flags.error) {
-      icon.innerHTML = `<i class="fa fa-exclamation-triangle" aria-hidden="true" style="color:red;"></i>`;
+      icon.innerHTML =
+        '<i class="fa fa-exclamation-triangle" aria-hidden="true" style="color:red;"></i>';
       if (!this.config.showDetailsWhenOffline) {
         $("#opMoreInfo").hide();
       }
     } else if (data.state.flags.ready) {
-      icon.innerHTML = `<i class="fa fa-check-circle" aria-hidden="true" style="color:green;"></i>`;
+      icon.innerHTML =
+        '<i class="fa fa-check-circle" aria-hidden="true" style="color:green;"></i>';
       if (!this.config.showDetailsWhenOffline) {
         $("#opMoreInfo").show();
       }
     } else if (data.state.flags.operational) {
-      icon.innerHTML = `<i class="fa fa-check-circle" aria-hidden="true" style="color:green;"></i>`;
+      icon.innerHTML =
+        '<i class="fa fa-check-circle" aria-hidden="true" style="color:green;"></i>';
       if (!this.config.showDetailsWhenOffline) {
         $("#opMoreInfo").show();
       }
@@ -337,7 +349,7 @@ Module.register("MMM-OctoMirror", {
     return ["octomirror.css", "font-awesome.css"];
   },
 
-  notificationReceived: function (notification, payload, sender) {
+  notificationReceived: function (notification) {
     if (notification === "DOM_OBJECTS_CREATED") {
       this.initializeSocket();
       this.scheduleUpdate(1);
