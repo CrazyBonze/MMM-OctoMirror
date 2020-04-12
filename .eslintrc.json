@@ -5,7 +5,8 @@
   ],
   "globals": {
     "OctoPrintClient": true,
-    "Log": true
+    "Log": true,
+    "MJPEG": true
   },
   "rules": {
     "indent": ["error", "tab"],
